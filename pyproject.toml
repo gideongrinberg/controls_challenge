@@ -3,12 +3,14 @@ name = "controls-challenge"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "gymnasium>=1.1.1",
+    "gym>=0.26.2",
     "matplotlib==3.8.1",
     "numpy>=1.26.4",
     "onnxruntime>=1.22.0",
     "pandas==2.1.2",
     "seaborn==0.13.2",
+    "shimmy>=2.0",
+    "stable-baselines3>=2.6.0",
     "tqdm>=4.67.1",
 ]
 

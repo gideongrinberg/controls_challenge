@@ -43,6 +43,19 @@ FuturePlan = namedtuple("FuturePlan", ["lataccel", "roll_lataccel", "v_ego", "a_
 DATASET_URL = "https://huggingface.co/datasets/commaai/commaSteeringControl/resolve/main/data/SYNTHETIC_V0.zip"
 DATASET_PATH = Path(__file__).resolve().parent / "data"
 
+model_path = "./models/tinyphysics.onnx"
+opt = ort.SessionOptions()
+opt.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+opt.intra_op_num_threads = os.cpu_count()  # leave inter‑op at 1
+opt.execution_mode = ort.ExecutionMode.ORT_PARALLEL
+opt.enable_mem_pattern = False  # large, variable inputs hurt mem‑pattern
+with open(model_path, "rb") as f:
+    session = ort.InferenceSession(
+        f.read(),
+        sess_options=opt,
+        providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+    )
+
 
 class LataccelTokenizer:
     def __init__(self):
@@ -67,14 +80,7 @@ class LataccelTokenizer:
 class TinyPhysicsModel:
     def __init__(self, model_path: str, debug: bool) -> None:
         self.tokenizer = LataccelTokenizer()
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = 1
-        options.inter_op_num_threads = 1
-        options.log_severity_level = 3
-        provider = "CPUExecutionProvider"
-
-        with open(model_path, "rb") as f:
-            self.ort_session = ort.InferenceSession(f.read(), options, [provider])
+        self.ort_session = session
 
     def softmax(self, x, axis=-1):
         e_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
@@ -314,9 +320,10 @@ def download_dataset():
         with zipfile.ZipFile(BytesIO(resp.read())) as z:
             for member in z.namelist():
                 if not member.endswith("/"):
-                    with z.open(member) as src, open(
-                        DATASET_PATH / os.path.basename(member), "wb"
-                    ) as dest:
+                    with (
+                        z.open(member) as src,
+                        open(DATASET_PATH / os.path.basename(member), "wb") as dest,
+                    ):
                         dest.write(src.read())
 
 

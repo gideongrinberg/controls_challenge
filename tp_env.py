@@ -1,17 +1,23 @@
+import os
 import gym
 import glob
 import random
 import numpy as np
 import pandas as pd
-import onnxruntime as ort
 
 from gym import spaces
 from tqdm import trange
 from functools import partial
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv
-from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator
-from tinyphysics import CONTEXT_LENGTH, STEER_RANGE, MAX_ACC_DELTA
+from stable_baselines3.common.vec_env import VecEnv
+from tinyphysics import (
+    TinyPhysicsModel,
+    TinyPhysicsSimulator,
+    download_dataset,
+    CONTEXT_LENGTH,
+    STEER_RANGE,
+    MAX_ACC_DELTA,
+)
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -39,15 +45,9 @@ class TinyPhysicsEnv(gym.Env):
             dtype=np.float32,
         )
 
-        roll_min, roll_max = (
-            self.data["roll_lataccel"].min(),
-            self.data["roll_lataccel"].max(),
-        )
-        v_min, v_max = self.data["v_ego"].min(), self.data["v_ego"].max()
-        a_min, a_max = self.data["a_ego"].min(), self.data["a_ego"].max()
         self.observation_space = spaces.Box(
-            low=np.array([roll_min, v_min, a_min], dtype=np.float32),
-            high=np.array([roll_max, v_max, a_max], dtype=np.float32),
+            low=np.array([-0.16868178, -0.10009988, -12.86107018], dtype=np.float32),
+            high=np.array([0.17329173, 42.86994681, 8.9678448], dtype=np.float32),
             dtype=np.float32,
         )
 
@@ -89,7 +89,7 @@ class TinyPhysicsEnv(gym.Env):
         self.sim.step_idx += 1
 
         obs = self._get_obs()
-        reward = -((target - pred) ** 2)*100
+        reward = -((target - pred) ** 2) * 100
         done = self.sim.step_idx >= len(self.data)
         info = {}
         return obs, reward, done, info
@@ -106,12 +106,14 @@ class TinyPhysicsEnv(gym.Env):
     def close(self):
         pass
 
-
 def make_env(data_path):
     return TinyPhysicsEnv("./models/tinyphysics.onnx", data_path)
 
 
 def train():
+    if not os.path.isdir("data/"):
+        download_dataset()
+
     files = glob.glob("data/**.csv")
     random.shuffle(files)
 
@@ -122,7 +124,7 @@ def train():
         )
 
         if model is None:
-            model = PPO("MlpPolicy", env, device="mps", verbose=1)
+            model = PPO("MlpPolicy", env, device="cuda", verbose=1)
         else:
             model.set_env(env)
 

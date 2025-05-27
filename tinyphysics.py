@@ -53,7 +53,7 @@ with open(model_path, "rb") as f:
     session = ort.InferenceSession(
         f.read(),
         sess_options=opt,
-        providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+        providers=["CPUExecutionProvider"],
     )
 
 

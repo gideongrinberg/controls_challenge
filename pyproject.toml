@@ -10,7 +10,7 @@ dependencies = [
     "pandas==2.1.2",
     "seaborn==0.13.2",
     "shimmy>=2.0",
-    "stable-baselines3>=2.6.0",
+    "stable-baselines3[extra]>=2.6.0",
     "tqdm>=4.67.1",
 ]
 

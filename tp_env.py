@@ -9,7 +9,7 @@ from tqdm import tqdm
 from gym import spaces
 from functools import partial
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 from tinyphysics import (
     TinyPhysicsModel,
     TinyPhysicsSimulator,
@@ -22,10 +22,12 @@ from tinyphysics import (
 )
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
 files = glob.glob("data/*.csv")
 random.shuffle(files)
+
 
 class TinyPhysicsEnv(gym.Env):
     def __init__(
@@ -44,22 +46,32 @@ class TinyPhysicsEnv(gym.Env):
             dtype=np.float32,
         )
 
-        low_obs = np.concatenate([
-            np.array([
-                self.data["roll_lataccel"].min(),
-                self.data["v_ego"].min(),
-                self.data["a_ego"].min(),
-            ], dtype=np.float32),
-            np.full(FUTURE_PLAN_STEPS, LATACCEL_RANGE[0], dtype=np.float32),
-        ])
-        high_obs = np.concatenate([
-            np.array([
-                self.data["roll_lataccel"].max(),
-                self.data["v_ego"].max(),
-                self.data["a_ego"].max(),
-            ], dtype=np.float32),
-            np.full(FUTURE_PLAN_STEPS, LATACCEL_RANGE[1], dtype=np.float32),
-        ])
+        low_obs = np.concatenate(
+            [
+                np.array(
+                    [
+                        self.data["roll_lataccel"].min(),
+                        self.data["v_ego"].min(),
+                        self.data["a_ego"].min(),
+                    ],
+                    dtype=np.float32,
+                ),
+                np.full(FUTURE_PLAN_STEPS, LATACCEL_RANGE[0], dtype=np.float32),
+            ]
+        )
+        high_obs = np.concatenate(
+            [
+                np.array(
+                    [
+                        self.data["roll_lataccel"].max(),
+                        self.data["v_ego"].max(),
+                        self.data["a_ego"].max(),
+                    ],
+                    dtype=np.float32,
+                ),
+                np.full(FUTURE_PLAN_STEPS, LATACCEL_RANGE[1], dtype=np.float32),
+            ]
+        )
         self.observation_space = spaces.Box(
             low=low_obs,
             high=high_obs,
@@ -70,13 +82,15 @@ class TinyPhysicsEnv(gym.Env):
 
     def _get_data(self, data_path: str) -> pd.DataFrame:
         df = pd.read_csv(data_path)
-        return pd.DataFrame({
-            "roll_lataccel": np.sin(df["roll"].values) * 9.81,
-            "v_ego": df["vEgo"].values,
-            "a_ego": df["aEgo"].values,
-            "target_lataccel": df["targetLateralAcceleration"].values,
-            "steer_command": -df["steerCommand"].values,
-        })
+        return pd.DataFrame(
+            {
+                "roll_lataccel": np.sin(df["roll"].values) * 9.81,
+                "v_ego": df["vEgo"].values,
+                "a_ego": df["aEgo"].values,
+                "target_lataccel": df["targetLateralAcceleration"].values,
+                "steer_command": -df["steerCommand"].values,
+            }
+        )
 
     def _reset_internal(self):
         self.sim = TinyPhysicsSimulator(
@@ -139,8 +153,12 @@ class TinyPhysicsEnv(gym.Env):
 def make_env(file_path):
     return TinyPhysicsEnv("./models/tinyphysics.onnx", file_path)
 
+
 if __name__ == "__main__":
-    envs = SubprocVecEnv([partial(make_env, f) for f in files[:10]])
-    model = PPO("MlpPolicy", envs, verbose=1)
+    venv = SubprocVecEnv([partial(make_env, f) for f in files[:100]])
+    env = VecNormalize(venv)
+
+    model = PPO("MlpPolicy", env, verbose=1)
     model.learn(total_timesteps=200_000, progress_bar=True)
-    model.save("controls_model")
+    env.save(f"data/env.pkl")
+    model.save(f"models/model.chkpt")

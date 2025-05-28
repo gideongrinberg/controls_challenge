@@ -8,7 +8,7 @@ class Controller(BaseController):
     A controller that queries a trained SB3 PPO policy for steering actions,
     including future_plan in the observation.
     """
-    def __init__(self, model_path: str = "controls_model.zip"):
+    def __init__(self, model_path: str = "controls_model_bkp.zip"):
         self.model = PPO.load(model_path)
         super().__init__()
 
